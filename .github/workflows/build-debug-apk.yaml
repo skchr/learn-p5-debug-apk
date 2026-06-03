@@ -71,7 +71,9 @@ jobs:
         run: npx expo prebuild --platform android --clean
 
       - name: Build debug APK
-        run: npx expo run:android --variant debug --no-install --no-bundler
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
 
       - name: Find built APK
         run: find android -name "*.apk" -type f
