@@ -104,6 +104,7 @@ jobs:
             gh release delete "$TAG" --yes
           fi
           gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
             --title "Debug APK for ${{ needs.check.outputs.tag }}" \
             --notes "Debug build from [prjctimg/learn-p5@${{ needs.check.outputs.tag }}](https://github.com/prjctimg/learn-p5/releases/tag/${{ needs.check.outputs.tag }})" \
             "$APK"
