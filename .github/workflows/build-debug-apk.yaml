@@ -28,6 +28,10 @@ jobs:
             TAG="${{ inputs.release_tag }}"
           else
             TAG=$(gh release list --repo prjctimg/learn-p5 --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null) || TAG=""
+            if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+              TAG=$(git -c 'versionsort.suffix=-' ls-remote --tags --sort=-v:refname https://github.com/prjctimg/learn-p5.git \
+                | awk -F/ '{print $3}' | grep -v '\^{}' | head -1) || TAG=""
+            fi
           fi
 
           if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
