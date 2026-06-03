@@ -1,0 +1,63 @@
+name: Build Debug APK
+
+on:
+  repository_dispatch:
+    types: [release-published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Git tag of the release on prjctimg/learn-p5'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout prjctimg/learn-p5
+        run: |
+          TAG="${{ inputs.release_tag || github.event.client_payload.release_tag }}"
+          git clone --depth 1 --branch "$TAG" https://github.com/prjctimg/learn-p5.git .
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Prebuild native project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build debug APK
+        run: npx expo run:android --variant debug --no-install --no-bundler
+
+      - name: Verify APK was built
+        run: find android -name "*.apk" -type f
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.release_tag || github.event.client_payload.release_tag }}"
+          gh release create "debug-$TAG" \
+            --title "Debug APK for $TAG" \
+            --notes "Debug build from [prjctimg/learn-p5@$TAG](https://github.com/prjctimg/learn-p5/releases/tag/$TAG)" \
+            --clobber
+
+      - name: Upload APK to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.release_tag || github.event.client_payload.release_tag }}"
+          gh release upload "debug-$TAG" android/**/*.apk --clobber
