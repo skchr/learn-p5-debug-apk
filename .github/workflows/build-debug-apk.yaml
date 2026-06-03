@@ -27,7 +27,7 @@ jobs:
           if [ -n "${{ inputs.release_tag }}" ]; then
             TAG="${{ inputs.release_tag }}"
           else
-            TAG=$(gh api repos/prjctimg/learn-p5/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+            TAG=$(gh release list --repo prjctimg/learn-p5 --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null) || TAG=""
           fi
 
           if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
