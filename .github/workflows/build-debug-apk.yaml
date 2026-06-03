@@ -71,6 +71,16 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Prebuild native project
         run: npx expo prebuild --platform android --clean
 
@@ -80,7 +90,10 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
       - name: Find built APK
-        run: find android -name "*.apk" -type f
+        run: |
+          APK=$(find android -name "*.apk" -type f | head -1)
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          echo "Found: $APK"
 
       - name: Create release and upload APK
         env:
@@ -93,4 +106,4 @@ jobs:
           gh release create "$TAG" \
             --title "Debug APK for ${{ needs.check.outputs.tag }}" \
             --notes "Debug build from [prjctimg/learn-p5@${{ needs.check.outputs.tag }}](https://github.com/prjctimg/learn-p5/releases/tag/${{ needs.check.outputs.tag }})" \
-            android/**/*.apk
+            "$APK"
