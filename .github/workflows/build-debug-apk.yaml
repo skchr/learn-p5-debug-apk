@@ -1,25 +1,56 @@
 name: Build Debug APK
 
 on:
-  repository_dispatch:
-    types: [release-published]
+  schedule:
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Git tag of the release on prjctimg/learn-p5'
-        required: true
+        description: 'Tag from prjctimg/learn-p5 to build'
+        required: false
 
 permissions:
   contents: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      should_build: ${{ steps.resolve.outputs.should_build }}
+    steps:
+      - name: Resolve tag to build
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            TAG="${{ inputs.release_tag }}"
+          else
+            TAG=$(gh api repos/prjctimg/learn-p5/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if gh release view "debug-$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout prjctimg/learn-p5
+      - name: Checkout prjctimg/learn-p5 at ${{ needs.check.outputs.tag }}
         run: |
-          TAG="${{ inputs.release_tag || github.event.client_payload.release_tag }}"
-          git clone --depth 1 --branch "$TAG" https://github.com/prjctimg/learn-p5.git .
+          git clone --depth 1 --branch "${{ needs.check.outputs.tag }}" \
+            https://github.com/prjctimg/learn-p5.git .
 
       - uses: actions/setup-node@v4
         with:
@@ -42,22 +73,15 @@ jobs:
       - name: Build debug APK
         run: npx expo run:android --variant debug --no-install --no-bundler
 
-      - name: Verify APK was built
+      - name: Find built APK
         run: find android -name "*.apk" -type f
 
-      - name: Create release
+      - name: Create release and upload APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ inputs.release_tag || github.event.client_payload.release_tag }}"
-          gh release create "debug-$TAG" \
-            --title "Debug APK for $TAG" \
-            --notes "Debug build from [prjctimg/learn-p5@$TAG](https://github.com/prjctimg/learn-p5/releases/tag/$TAG)" \
+          gh release create "debug-${{ needs.check.outputs.tag }}" \
+            --title "Debug APK for ${{ needs.check.outputs.tag }}" \
+            --notes "Debug build from [prjctimg/learn-p5@${{ needs.check.outputs.tag }}](https://github.com/prjctimg/learn-p5/releases/tag/${{ needs.check.outputs.tag }})" \
+            android/**/*.apk \
             --clobber
-
-      - name: Upload APK to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ inputs.release_tag || github.event.client_payload.release_tag }}"
-          gh release upload "debug-$TAG" android/**/*.apk --clobber
